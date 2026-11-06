@@ -1,6 +1,6 @@
 # ODD 判别规则明细（逐条 + 边界值）
 
-> 适用 profile：`profiles/byd_tjp.json`（`profile_id=byd_tjp`，`definition_mode=restrictive`，共 42 条规则）
+> 适用 profile：`profiles/byd_tjp.json`（`profile_id=byd_tjp`，`definition_mode=restrictive`，共 43 条规则）
 > 行为基准：本工作区代码 `odd_judge/core/{margin,evaluate,aggregate}.py`，所有边界值均经探针实测校验（校验日期 2026-11-06）
 > 语义总纲见 `docs/semantics.md`；本文只做"逐条可核对"的规格化列举。
 
@@ -84,8 +84,8 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 |---|---|
 | `expressway_main`、`highway_main` | INSIDE |
 | `urban_arterial`、`urban_minor`、`urban_branch`、`rural_road`、`highway_l1`～`highway_l4`、`other_road`（9 个 forbidden 值） | OUTSIDE |
-| 其他任意未知值 | 视同缺失（restrictive → OUTSIDE，`UNDEFINED-STRICT`） |
-| 缺失 | OUTSIDE（`UNDEFINED-STRICT`） |
+| 其他任意未知值 | 视同缺失 → UNDEFINED（`missing_policy by_tag road`，`MISSING-POLICY-UNDEFINED`） |
+| 缺失 | UNDEFINED（`missing_policy by_tag road`，不参与聚合） |
 
 注：该规则**无 `boundary_values`**，永远不会产生 BOUNDARY；schema 强制 `allowed_values` 与 `forbidden_values`/`boundary_values` 两两不重叠（配置重叠会在 `validate` 阶段报错）。
 
@@ -279,7 +279,7 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 **ODC.6.1.4.dms_ok DMS 正常** `qualitative_bool`｜`vehicle.dms_ok`｜expect=true｜allowed｜`ODC-DMS-SYS-001`
 → `true` = INSIDE；`false` = OUTSIDE；缺失 = OUTSIDE。
 
-### 3.7 传感器状态 ODC.7（4 条）
+### 3.7 传感器状态 ODC.7（5 条）
 
 **ODC.7.1.1.camera_degraded 摄像头退化** `qualitative_bool`｜`sensors.camera_degraded`｜expect=true｜**not_allowed**｜`PER-DEG-01`
 → `true` = OUTSIDE；`false` = INSIDE；缺失 = OUTSIDE。
@@ -293,6 +293,11 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 **ODC.7.1.4.lidar_confidence 激光雷达置信度** `numeric_range`｜`sensors.confidence_lidar`｜`op >=`，`thr=0.6`，`band=0.05`｜要求 allowed｜`PER-CONF-002` / `PER-CONF-NEAR`
 → 同 7.1.3：INS `v ≥ 0.65`；BND `[0.6, 0.65)`；OUT `v < 0.6`。
 
+**ODC.7.1.5.robc 综合运行置信度** `numeric_range`｜`sensors.robc`｜`op >=`，`thr=0.6`，`band=0.05`｜要求 allowed｜`PER-ROBC-001` / `PER-ROBC-NEAR`
+→ INS `v ≥ 0.65`；BND `[0.6, 0.65)`；OUT `v < 0.6`（ROBC 低分 → 该元素 OUTSIDE → 聚合 `mrm_or_refuse`，即 profile 级 fail-safe，对应感知侧 `out/robc`）；
+缺失 → **UNDEFINED**（`missing_policy.by_element`，`MISSING-POLICY-UNDEFINED` — IQSM 通道未接时保守未决，不判越界）。
+阈值 0.6/band 0.05 与同组 confidence 规则同口径，**占位待 IQSM 确认**。
+
 ---
 
 ## 4. 定性规则真值表汇总
@@ -301,10 +306,10 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 
 | element_id | allowed | boundary | forbidden | 未知值 | 缺失 |
 |---|---|---|---|---|---|
-| ODC.1.1.1.road_type | `expressway_main`, `highway_main` | —（无，故无 BOUNDARY） | 9 个非高速/快速路取值 | 视同缺失 → OUTSIDE | OUTSIDE |
+| ODC.1.1.1.road_type | `expressway_main`, `highway_main` | —（无，故无 BOUNDARY） | 9 个非高速/快速路取值 | 视同缺失 → UNDEFINED† | UNDEFINED† |
 | ODC.3.1.3.snow_level | `none`, `light` | `moderate` | `heavy`, `blizzard` | 视同缺失 → OUTSIDE | OUTSIDE |
 
-枚举规则的通用映射（`requirement=allowed`）：命中 allowed → INSIDE；命中 boundary → BOUNDARY；命中 forbidden → OUTSIDE；**未命中任何集合（未知取值）→ 视同缺失，按第 6 节回退**（restrictive 下即 OUTSIDE，permissive 下 INSIDE）。
+枚举规则的通用映射（`requirement=allowed`）：命中 allowed → INSIDE；命中 boundary → BOUNDARY；命中 forbidden → OUTSIDE；**未命中任何集合（未知取值）→ 视同缺失，按第 6 节回退**（byd_tjp：道路组命中 `missing_policy` → UNDEFINED†；环境组如 snow_level 无策略命中 → restrictive 下 OUTSIDE）。
 
 若 `requirement=not_allowed`：命中 forbidden/boundary/未知的处理先按上表得出原始状态，再整体对调（INSIDE↔OUTSIDE）。schema 为此约束了两种合法配置形态，消除歧义：
 
@@ -351,14 +356,14 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 
 ---
 
-## 5. 数值规则边界值速查总表（16 条）
+## 5. 数值规则边界值速查总表（17 条）
 
 | # | element_id | 运算符 | 阈值/区间 | band | INSIDE | BOUNDARY | OUTSIDE | 缺失 |
 |---|---|---|---|---|---|---|---|---|
-| 1 | ODC.1.2.1.curve_radius 曲率半径 | `>=` | 200.0 | 20.0 | `≥220` | `[200,220)` | `<200` | SKIPPED* |
-| 2 | ODC.1.2.2.longitudinal_grade 纵坡 | `between` | [−9, 9] | 0.9 | `[−8.1,8.1]` | `[−9,−8.1)∪(8.1,9]` | `<−9 ∨ >9` | OUTSIDE |
-| 3 | ODC.1.2.3.cross_slope 横坡 | `between` | [−2, 2] | 0.2 | `[−1.8,1.8]` | `[−2,−1.8)∪(1.8,2]` | `<−2 ∨ >2` | OUTSIDE |
-| 4 | ODC.1.2.4.lane_width 车道宽度 | `between` | [2.5, 5.5] | 0.2 | `[2.7,5.3]` | `[2.5,2.7)∪(5.3,5.5]` | `<2.5 ∨ >5.5` | OUTSIDE |
+| 1 | ODC.1.2.1.curve_radius 曲率半径 | `>=` | 200.0 | 20.0 | `≥220` | `[200,220)` | `<200` | UNDEFINED† / SKIPPED* |
+| 2 | ODC.1.2.2.longitudinal_grade 纵坡 | `between` | [−9, 9] | 0.9 | `[−8.1,8.1]` | `[−9,−8.1)∪(8.1,9]` | `<−9 ∨ >9` | UNDEFINED† |
+| 3 | ODC.1.2.3.cross_slope 横坡 | `between` | [−2, 2] | 0.2 | `[−1.8,1.8]` | `[−2,−1.8)∪(1.8,2]` | `<−2 ∨ >2` | UNDEFINED† |
+| 4 | ODC.1.2.4.lane_width 车道宽度 | `between` | [2.5, 5.5] | 0.2 | `[2.7,5.3]` | `[2.5,2.7)∪(5.3,5.5]` | `<2.5 ∨ >5.5` | UNDEFINED† |
 | 5 | ODC.2.1.1.speed 运行速度 | `between` | [0, 80] | 3.0 | `[3,77]` | `[0,3)∪(77,80]` | `<0 ∨ >80` | OUTSIDE |
 | 6 | ODC.2.1.2.activation_speed 激活速度 | `between` | [0, 80] | 3.0 | `[3,77]` | `[0,3)∪(77,80]` | `<0 ∨ >80` | OUTSIDE |
 | 7 | ODC.2.1.3.lat_accel 横向加速度 | `between` | [−2, 2] | 0.2 | `[−1.8,1.8]` | `[−2,−1.8)∪(1.8,2]` | `<−2 ∨ >2` | OUTSIDE |
@@ -366,13 +371,15 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
 | 9 | ODC.3.1.1.visibility 能见度 | `>=` | 200.0 | 30.0 | `≥230` | `[200,230)` | `<200` | OUTSIDE |
 | 10 | ODC.3.1.2.rain_intensity 降雨强度 | `<=` | 14.9 | 1.5 | `≤13.4` | `(13.4,14.9]` | `>14.9` | OUTSIDE |
 | 11 | ODC.3.1.4.illumination 环境照度 | `>=` | 50.0 | 10.0 | `≥60` | `[50,60)` | `<50` | OUTSIDE |
-| 12 | ODC.4.1.3.animal 动物计数 | `<=` | 0.0 | 0.0 | `≤0` | 无带 | `>0` | OUTSIDE |
-| 13 | ODC.4.1.4.obstacle 障碍物计数 | `<=` | 0.0 | 0.0 | `≤0` | 无带 | `>0` | OUTSIDE |
+| 12 | ODC.4.1.3.animal 动物计数 | `<=` | 0.0 | 0.0 | `≤0` | 无带 | `>0` | UNDEFINED† |
+| 13 | ODC.4.1.4.obstacle 障碍物计数 | `<=` | 0.0 | 0.0 | `≤0` | 无带 | `>0` | UNDEFINED† |
 | 14 | ODC.5.1.3.eyes_closed 闭眼时长 | `<=` | 30.0 | 5.0 | `≤25` | `(25,30]` | `>30` | OUTSIDE |
 | 15 | ODC.7.1.3.camera_confidence 摄像头置信度 | `>=` | 0.6 | 0.05 | `≥0.65` | `[0.6,0.65)` | `<0.6` | OUTSIDE |
 | 16 | ODC.7.1.4.lidar_confidence 激光雷达置信度 | `>=` | 0.6 | 0.05 | `≥0.65` | `[0.6,0.65)` | `<0.6` | OUTSIDE |
+| 17 | ODC.7.1.5.robc 综合运行置信度 | `>=` | 0.6 | 0.05 | `≥0.65` | `[0.6,0.65)` | `<0.6` | UNDEFINED† |
 
-\* 曲率半径在 `applies_when`（road_type ∈ 高速/快速路主路）为假时 **SKIPPED**；仅当 road_type 存在且合规、而曲率半径键缺失时才走 OUTSIDE。
+\* 曲率半径在 `applies_when`（road_type ∈ 高速/快速路主路）为假时 **SKIPPED**（`applies_when` 先于缺失回退）；road_type 合规而曲率半径键缺失时按 † 走 UNDEFINED。
+† `missing_policy` 命中（`by_tag road/scenery/dynamic` 或 `by_element ODC.7.1.5.robc`）→ **UNDEFINED**（`MISSING-POLICY-UNDEFINED`，不参与聚合，来源记入 `policy_source`）；其余元素缺失仍按 restrictive → OUTSIDE。
 
 区间端点约定（详见 2.1/2.2）：**区间内侧的带边缘（如 3、77、2.7、±1.8、±8.1）归 INSIDE**（fp 容差保护）；**阈值与区间外端点（200、14.9、0、80、±2、±9、±10…）归 BOUNDARY**。
 
@@ -387,24 +394,28 @@ INSIDE    margin ≥ band            （"恰好差一个 band" 的端点归 INSI
    - `allowed` → **INSIDE**（静默，无 reason_code）；
    - `not_allowed` → **OUTSIDE**（`UNDEFINED-AS-NOT-ALLOWED`）；
    - `undefined` → **UNDEFINED**（`UNDEFINED-AS-UNDEFINED`，不参与聚合）。
-3. profile `definition_mode`（byd_tjp = `restrictive`）：
+3. profile `missing_policy`（`by_element` → `by_tag` → `default`；byd_tjp 已配置）：
+   - `by_tag road/scenery/dynamic` → **UNDEFINED**（`MISSING-POLICY-UNDEFINED`，道路/目标物组 20 条，不参与聚合，来源记入 `policy_source`）；
+   - `by_element ODC.7.1.5.robc` → **UNDEFINED**（IQSM 通道未接时未决）；
+   - `default: "mode"` → 落到下一级 `definition_mode`。
+4. profile `definition_mode`（byd_tjp = `restrictive`）：
    - `restrictive` → **OUTSIDE**（`UNDEFINED-STRICT`）；
    - `permissive` → INSIDE（`UNDEFINED-PERMISSIVE`）；
    - `default` → UNDEFINED（`UNDEFINED-DEFAULT`，不参与聚合）。
 
 以下情况**视同观测缺失**，走上列回退：
 
-4. 数值规则：观测键缺失、非数字字符串（如 `"N/A"`）、**非有限数值（`NaN` / `±inf`）**。
-5. 布尔规则：观测键缺失、**非布尔类型**（字符串 `"false"`、`2`、对象等；数值 `0`/`1` 合法）。
-6. 枚举规则（`requirement=allowed` 形态）：观测键缺失、**未命中任何取值集合的未知值**。
-7. 布尔置信度判别（失配分支）：置信度键缺失、非数值或非有限值、`c < threshold − band`。
+5. 数值规则：观测键缺失、非数字字符串（如 `"N/A"`）、**非有限数值（`NaN` / `±inf`）**。
+6. 布尔规则：观测键缺失、**非布尔类型**（字符串 `"false"`、`2`、对象等；数值 `0`/`1` 合法）。
+7. 枚举规则（`requirement=allowed` 形态）：观测键缺失、**未命中任何取值集合的未知值**。
+8. 布尔置信度判别（失配分支）：置信度键缺失、非数值或非有限值、`c < threshold − band`。
 
 不走缺失回退的两类：
 
-8. `applies_when` 中引用的键缺失 → 该叶子为假 → 规则 **SKIPPED**（`CONDITIONAL-SKIP`）。
-9. 元素 `requirement = undefined` → `UNDEFINED-REQ`（见第 1 条）。
+9. `applies_when` 中引用的键缺失 → 该叶子为假 → 规则 **SKIPPED**（`CONDITIONAL-SKIP`）。
+10. 元素 `requirement = undefined` → `UNDEFINED-REQ`（见第 1 条）。
 
-byd_tjp（restrictive）下 42 条规则的缺失结论：**41 条 → OUTSIDE，曲率半径在 road_type 缺失/不合规时 → SKIPPED**。
+byd_tjp（restrictive + missing_policy）下 43 条规则的缺失结论：**道路/目标物组 20 条 + ROBC 1 条 → UNDEFINED（命中 missing_policy），其余 22 条 → OUTSIDE（restrictive）；曲率半径在 road_type 缺失/不合规时 → SKIPPED（applies_when 先于缺失回退）**。映射层配套：检测出现未知类别时 `dynamic.*` 整组不产出（见 suite `dynamic_rollup`），恰由 `by_tag dynamic` 承接为 UNDEFINED。
 
 ---
 

@@ -91,13 +91,13 @@ ODD_Judge/
 ├── observations/         # 观测样例 (inside/boundary/outside)
 ├── tests/                # 单元 + e2e（含自 suite 迁入的 missing_policy / ext / city override 用例）
 ├── docs/
-│   ├── odd_rules.md      # 逐条 ODD 判别规则 + 边界值明细（byd_tjp 42 条）
+│   ├── odd_rules.md      # 逐条 ODD 判别规则 + 边界值明细（byd_tjp 43 条）
 │   └── semantics.md      # 判决语义说明（通用语义总纲）
 ```
 
 ## 判决语义速查
 
-> 完整的逐条规则与精确边界值（16 条数值 / 2 条枚举 / 24 条布尔）见 **`docs/odd_rules.md`**。
+> 完整的逐条规则与精确边界值（17 条数值 / 2 条枚举 / 24 条布尔）见 **`docs/odd_rules.md`**。
 
 | 元素要求 | 域内 | 临近边界 | 越界 |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # ODD 判决语义
 
-> 逐条规则与具体边界值见 **`docs/odd_rules.md`**（profile = `byd_tjp`，42 条，边界值经实测校验）。
+> 逐条规则与具体边界值见 **`docs/odd_rules.md`**（profile = `byd_tjp`，43 条，边界值经实测校验）。
 > 本文描述通用语义，与当前实现一致（2026-11-06 基准）；逐条规则与精确边界值见 `docs/odd_rules.md`。
 
 ## 1. 三态分类（ISO 34503 Clause 6）
