@@ -1,0 +1,23 @@
+[project]
+name = "odd-judge"
+version = "0.1.0"
+description = "ODD (Operational Design Domain) judgment engine for boundary-proximity early warning"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+odd-judge = "odd_judge.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["odd_judge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
