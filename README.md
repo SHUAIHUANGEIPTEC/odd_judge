@@ -2,6 +2,12 @@
 
 针对 **临近边界** 与 **越界** 行为进行预警的 ODD（Operational Design Domain）判决工程。
 
+> **独立仓库**：本仓是 `odd_judge` 引擎的 canonical 源。
+> `odd_perception_suite` 以 **git submodule `judge/`** 消费本仓（双 editable 安装
+> `pip install -e ./judge -e ".[dev]"`）；引擎改动请在本仓提交后再更新子模块指针。
+> 引擎级 fixture 同步约定：`profiles/`、`switches/` 的规则内容以**本仓为准**，
+> 改动后同步到 suite 根目录同名副本（suite CLI 按自身根目录读取）。
+
 ## 特性
 
 - **三态判决**：`INSIDE`（域内）/ `BOUNDARY`（临近边界）/ `OUTSIDE`（越界）
@@ -79,10 +85,11 @@ ODD_Judge/
 ├── profiles/             # ODD 规则 profile
 │   ├── byd_tjp.json      # BYD TJP 默认 profile（restrictive）
 │   ├── odc_skeleton.json # GB/T 45312 骨架（default）
-│   └── overrides/        # 企业扩展 override
+│   ├── odc_ext_cn.json   # CN 扩展维度（附着/密度/限速）
+│   └── overrides/        # 企业扩展 override（example_enterprise / city_noa_cn）
 ├── switches/             # 开关策略
 ├── observations/         # 观测样例 (inside/boundary/outside)
-├── tests/                # 单元 + e2e 测试
+├── tests/                # 单元 + e2e（含自 suite 迁入的 missing_policy / ext / city override 用例）
 ├── docs/
 │   ├── odd_rules.md      # 逐条 ODD 判别规则 + 边界值明细（byd_tjp 42 条）
 │   └── semantics.md      # 判决语义说明（通用语义总纲）
@@ -102,6 +109,10 @@ ODD_Judge/
 - `restrictive` → OUTSIDE（BYD TJP 默认，安全优先）
 - `permissive` → INSIDE
 - `default` → UNDEFINED
+
+回退优先级：`requirement=undefined` > 元素 `undefined_as` > profile 顶层
+`missing_policy`（`by_element` → `by_tag` → `default`，取值
+`allowed | not_allowed | undefined | mode`，命中来源记入 `policy_source`）> `definition_mode`。
 
 聚合优先级：`OUTSIDE > BOUNDARY > INSIDE`  
 建议映射：`continue` / `warn_driver` / `mrm_or_refuse`
